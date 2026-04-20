@@ -503,7 +503,7 @@
 
 <script>
 // ─── CONFIGURACIÓN ───────────────────────────────────────────
-const WEBHOOK_URL = 'https://smesapachon4.app.n8n.cloud/webhook/correccion-servicio';
+const WEBHOOK_URL = 'https://smesapachon3.app.n8n.cloud/webhook/correccion-servicio';
 // ─────────────────────────────────────────────────────────────
 
 let originalData = {};
@@ -825,6 +825,8 @@ async function guardarCorrecciones() {
   loading.classList.add('active');
 
   const datos = recopilarDatos();
+  const params = getParams();
+  const resumeUrl = params.resumeUrl || null;
 
   try {
     const res = await fetch(WEBHOOK_URL, {
@@ -833,16 +835,23 @@ async function guardarCorrecciones() {
       body: JSON.stringify(datos)
     });
 
-    loading.classList.remove('active');
+    if (!res.ok) throw new Error('Error ' + res.status);
 
-    if (res.ok) {
-      showToast('✓ Correcciones enviadas. Se regenerará el PDF y se reenviará al gerente.', 'success');
-      btn.textContent = 'ENVIADO ✓';
-      btn.style.background = '#1e6b3c';
-      setTimeout(() => { window.close(); }, 3500);
-    } else {
-      throw new Error('Error ' + res.status);
+    // Cancelar el Wait del flujo principal si hay resumeUrl
+    if (resumeUrl) {
+      try {
+        await fetch(resumeUrl, { method: 'GET', mode: 'no-cors' });
+      } catch(e) {
+        // Ignorar error de CORS — la llamada igual llega a n8n
+      }
     }
+
+    loading.classList.remove('active');
+    showToast('✓ Correcciones enviadas. Se regenerará el PDF y se reenviará al gerente.', 'success');
+    btn.textContent = 'ENVIADO ✓';
+    btn.style.background = '#1e6b3c';
+    setTimeout(() => { window.close(); }, 3500);
+
   } catch(err) {
     loading.classList.remove('active');
     btn.disabled = false;
