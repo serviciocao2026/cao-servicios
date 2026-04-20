@@ -845,7 +845,7 @@ async function guardarCorrecciones() {
     // Cancelar el Wait del flujo principal si hay resumeUrl
     if (RESUME_URL) {
       try {
-        await fetch(RESUME_URL, { method: 'GET', mode: 'no-cors' });
+        await fetch(RESUME_URL + '?action=corregir', { method: 'GET', mode: 'no-cors' });
       } catch(e) {
         // Ignorar error de CORS — la llamada igual llega a n8n
       }
