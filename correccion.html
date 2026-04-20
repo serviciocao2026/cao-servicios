@@ -542,6 +542,7 @@ function val(v) { return v || ''; }
 
 function buildForm(data) {
   originalData = JSON.parse(JSON.stringify(data));
+  window._id_cliente = data.id_cliente || '';
   document.getElementById('badge-id').textContent = data.id_servicio || '—';
   document.getElementById('actions-bar').style.display = 'flex';
 
@@ -815,6 +816,7 @@ function recopilarDatos() {
     equipos_intervenidos: JSON.stringify(equipos),
     solicitud_servicio: JSON.stringify(solicitudes),
     correo_envio: document.getElementById('correo_cliente').value,
+    id_cliente: window._id_cliente || '',
     resume_url_principal: RESUME_URL || ''
   };
 }
