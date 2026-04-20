@@ -515,29 +515,24 @@ function getParams() {
   const search = window.location.search.substring(1);
   if (!search) return {};
   try {
-    // Leer resumeUrl primero (antes del data=)
-    const resumeMatch = search.match(/(?:^|&)resumeUrl=([^&]*(?:%[0-9A-Fa-f]{2}[^&]*)*)/);
+    // Leer resumeUrl si existe
+    const resumeMatch = search.match(/[?&]resumeUrl=([^&]*(?:%[0-9A-Fa-f]{2}[^&]*)*)/);
     if (resumeMatch) {
       RESUME_URL = decodeURIComponent(resumeMatch[1]);
     }
-    // Leer data=
+    // Leer data= — cortar antes de &resumeUrl si existe
     const dataIndex = search.indexOf('data=');
     if (dataIndex !== -1) {
-      const raw = search.substring(dataIndex + 5);
+      let raw = search.substring(dataIndex + 5);
+      // Cortar en &resumeUrl= si existe al final
+      const resumeIndex = raw.indexOf('&resumeUrl=');
+      if (resumeIndex !== -1) {
+        raw = raw.substring(0, resumeIndex);
+      }
       const decoded = decodeURIComponent(raw).replace(/\+/g, ' ');
       return JSON.parse(decoded);
     }
-    // fallback: params individuales
-    const params = {};
-    search.split('&').forEach(p => {
-      const eq = p.indexOf('=');
-      if (eq > 0) {
-        const k = decodeURIComponent(p.substring(0, eq));
-        const v = decodeURIComponent(p.substring(eq + 1)).replace(/\+/g, ' ');
-        params[k] = v;
-      }
-    });
-    return params;
+    return {};
   } catch(e) {
     return {};
   }
