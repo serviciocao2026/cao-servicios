@@ -503,17 +503,24 @@
 
 <script>
 // ─── CONFIGURACIÓN ───────────────────────────────────────────
-const WEBHOOK_URL = 'https://smesapachon3.app.n8n.cloud/webhook/correccion-servicio';
+const WEBHOOK_URL = 'https://smesapachon4.app.n8n.cloud/webhook/correccion-servicio';
 // ─────────────────────────────────────────────────────────────
 
 let originalData = {};
 let changesCount = 0;
+let RESUME_URL = null;
 
 // Leer params de URL
 function getParams() {
   const search = window.location.search.substring(1);
   if (!search) return {};
   try {
+    // Leer resumeUrl primero (antes del data=)
+    const resumeMatch = search.match(/(?:^|&)resumeUrl=([^&]*(?:%[0-9A-Fa-f]{2}[^&]*)*)/);
+    if (resumeMatch) {
+      RESUME_URL = decodeURIComponent(resumeMatch[1]);
+    }
+    // Leer data=
     const dataIndex = search.indexOf('data=');
     if (dataIndex !== -1) {
       const raw = search.substring(dataIndex + 5);
@@ -825,8 +832,6 @@ async function guardarCorrecciones() {
   loading.classList.add('active');
 
   const datos = recopilarDatos();
-  const params = getParams();
-  const resumeUrl = params.resumeUrl || null;
 
   try {
     const res = await fetch(WEBHOOK_URL, {
@@ -838,9 +843,9 @@ async function guardarCorrecciones() {
     if (!res.ok) throw new Error('Error ' + res.status);
 
     // Cancelar el Wait del flujo principal si hay resumeUrl
-    if (resumeUrl) {
+    if (RESUME_URL) {
       try {
-        await fetch(resumeUrl, { method: 'GET', mode: 'no-cors' });
+        await fetch(RESUME_URL, { method: 'GET', mode: 'no-cors' });
       } catch(e) {
         // Ignorar error de CORS — la llamada igual llega a n8n
       }
