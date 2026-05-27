@@ -326,6 +326,120 @@
     box-shadow: 0 0 0 2px rgba(192,57,43,0.1);
   }
 
+  /* ─── FIRMA DEL CLIENTE ─────────────────────────────────── */
+  .firma-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .firma-label-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .firma-label-row span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .firma-status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+  }
+
+  .firma-status.vacia {
+    background: #f0ede8;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .firma-status.firmado {
+    background: #d4edda;
+    color: var(--success);
+    border: 1px solid #a8d5b5;
+  }
+
+  #canvas-firma {
+    width: 100%;
+    max-width: 600px;
+    height: 180px;
+    border: 2px dashed var(--border-strong);
+    border-radius: 4px;
+    background: #faf9f7;
+    cursor: crosshair;
+    touch-action: none;
+    display: block;
+  }
+
+  #canvas-firma.tiene-firma {
+    border: 2px solid var(--success);
+    background: #fff;
+  }
+
+  .firma-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+  }
+
+  .firma-acciones {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn-limpiar-firma {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    padding: 8px 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-limpiar-firma:hover {
+    background: #fde8e6;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-omitir-firma {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 8px 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    opacity: 0.7;
+  }
+
+  .btn-omitir-firma:hover { opacity: 1; background: var(--bg); }
+  /* ─────────────────────────────────────────────────────────── */
+
   /* FOOTER ACTIONS */
   .actions-bar {
     position: fixed;
@@ -510,32 +624,32 @@ let originalData = {};
 let changesCount = 0;
 let RESUME_URL = null;
 
-// Leer params de URL
+// ─── FIRMA: variables de estado ──────────────────────────────
+let firmaCanvas = null;
+let firmaCtx = null;
+let dibujando = false;
+let firmaOmitida = false;
+let ultimoX = 0, ultimoY = 0;
+// ─────────────────────────────────────────────────────────────
+
 function getParams() {
   const search = window.location.search.substring(1);
   if (!search) return {};
   try {
-    // Leer resumeUrl si existe
     const resumeMatch = search.match(/[?&]resumeUrl=([^&]*(?:%[0-9A-Fa-f]{2}[^&]*)*)/);
     if (resumeMatch) {
       RESUME_URL = decodeURIComponent(resumeMatch[1]);
     }
-    // Leer data= — cortar antes de &resumeUrl si existe
     const dataIndex = search.indexOf('data=');
     if (dataIndex !== -1) {
       let raw = search.substring(dataIndex + 5);
-      // Cortar en &resumeUrl= si existe al final
       const resumeIndex = raw.indexOf('&resumeUrl=');
-      if (resumeIndex !== -1) {
-        raw = raw.substring(0, resumeIndex);
-      }
+      if (resumeIndex !== -1) raw = raw.substring(0, resumeIndex);
       const decoded = decodeURIComponent(raw).replace(/\+/g, ' ');
       return JSON.parse(decoded);
     }
     return {};
-  } catch(e) {
-    return {};
-  }
+  } catch(e) { return {}; }
 }
 
 function val(v) { return v || ''; }
@@ -717,23 +831,168 @@ function buildForm(data) {
       </div>
     </div>
 
+    <!-- FIRMA DEL CLIENTE -->
+    <div class="section">
+      <div class="section-header"><span class="dot"></span>Firma del Cliente</div>
+      <div class="section-body">
+        <div class="firma-wrapper">
+          <div class="firma-label-row">
+            <span>Firma del cliente — usar dedo o mouse</span>
+            <span class="firma-status vacia" id="firma-status">SIN FIRMA</span>
+          </div>
+          <canvas id="canvas-firma" width="600" height="180"></canvas>
+          <p class="firma-hint" id="firma-hint">Firme dentro del recuadro</p>
+          <div class="firma-acciones">
+            <button class="btn-limpiar-firma" onclick="limpiarFirma()">✕ LIMPIAR FIRMA</button>
+            <button class="btn-omitir-firma" onclick="omitirFirma()" id="btn-omitir">OMITIR FIRMA</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   `;
 
-  // Detectar cambios
+  // Detectar cambios en inputs y textareas
   document.querySelectorAll('input:not([readonly]), textarea').forEach(el => {
     el.addEventListener('input', trackChange);
   });
+
+  // Inicializar canvas de firma
+  iniciarCanvas();
 }
+
+// ─── CANVAS DE FIRMA ─────────────────────────────────────────
+
+function iniciarCanvas() {
+  firmaCanvas = document.getElementById('canvas-firma');
+  firmaCtx = firmaCanvas.getContext('2d');
+
+  // Eventos mouse
+  firmaCanvas.addEventListener('mousedown', iniciarTrazo);
+  firmaCanvas.addEventListener('mousemove', dibujar);
+  firmaCanvas.addEventListener('mouseup', terminarTrazo);
+  firmaCanvas.addEventListener('mouseleave', terminarTrazo);
+
+  // Eventos touch (celular/tablet)
+  firmaCanvas.addEventListener('touchstart', e => { e.preventDefault(); iniciarTrazo(e.touches[0]); }, { passive: false });
+  firmaCanvas.addEventListener('touchmove',  e => { e.preventDefault(); dibujar(e.touches[0]); },     { passive: false });
+  firmaCanvas.addEventListener('touchend',   e => { e.preventDefault(); terminarTrazo(); },            { passive: false });
+
+  // Esperar a que el layout termine de renderizar antes de fijar dimensiones
+  requestAnimationFrame(() => {
+    ajustarCanvas();
+  });
+}
+
+function ajustarCanvas() {
+  const ratio = window.devicePixelRatio || 1;
+  const rect = firmaCanvas.getBoundingClientRect();
+  const w = rect.width > 0 ? rect.width : 600;
+  const h = 180;
+
+  // Guardar firma actual antes de redimensionar (si hay alguna)
+  let imgData = null;
+  if (!canvasEstaVacio()) {
+    imgData = firmaCanvas.toDataURL('image/png');
+  }
+
+  firmaCanvas.width  = w * ratio;
+  firmaCanvas.height = h * ratio;
+
+  firmaCtx.scale(ratio, ratio);
+  firmaCtx.strokeStyle = '#1a1714';
+  firmaCtx.lineWidth = 2.5;
+  firmaCtx.lineCap = 'round';
+  firmaCtx.lineJoin = 'round';
+
+  // Restaurar firma si había una
+  if (imgData) {
+    const img = new Image();
+    img.onload = () => firmaCtx.drawImage(img, 0, 0, w, h);
+    img.src = imgData;
+  }
+}
+
+function getPosicion(e) {
+  const rect = firmaCanvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left),
+    y: (e.clientY - rect.top)
+  };
+}
+
+function iniciarTrazo(e) {
+  dibujando = true;
+  const pos = getPosicion(e);
+  ultimoX = pos.x;
+  ultimoY = pos.y;
+  firmaCtx.beginPath();
+  firmaCtx.moveTo(ultimoX, ultimoY);
+}
+
+function dibujar(e) {
+  if (!dibujando) return;
+  const pos = getPosicion(e);
+  firmaCtx.lineTo(pos.x, pos.y);
+  firmaCtx.stroke();
+  firmaCtx.beginPath();
+  firmaCtx.moveTo(pos.x, pos.y);
+  ultimoX = pos.x;
+  ultimoY = pos.y;
+
+  // Actualizar estado visual
+  firmaCanvas.classList.add('tiene-firma');
+  firmaOmitida = false;
+  document.getElementById('firma-status').textContent = 'FIRMADO ✓';
+  document.getElementById('firma-status').className = 'firma-status firmado';
+  document.getElementById('firma-hint').textContent = 'Firma capturada correctamente';
+  document.getElementById('btn-omitir').textContent = 'OMITIR FIRMA';
+}
+
+function terminarTrazo() {
+  dibujando = false;
+  firmaCtx.beginPath();
+}
+
+function limpiarFirma() {
+  const rect = firmaCanvas.getBoundingClientRect();
+  firmaCtx.clearRect(0, 0, rect.width, 180);
+  firmaCanvas.classList.remove('tiene-firma');
+  firmaOmitida = false;
+  document.getElementById('firma-status').textContent = 'SIN FIRMA';
+  document.getElementById('firma-status').className = 'firma-status vacia';
+  document.getElementById('firma-hint').textContent = 'Firme dentro del recuadro';
+  document.getElementById('btn-omitir').textContent = 'OMITIR FIRMA';
+}
+
+function omitirFirma() {
+  limpiarFirma();
+  firmaOmitida = true;
+  document.getElementById('firma-status').textContent = 'OMITIDA';
+  document.getElementById('firma-status').className = 'firma-status vacia';
+  document.getElementById('firma-hint').textContent = 'El PDF se enviará sin firma del cliente';
+  document.getElementById('btn-omitir').textContent = 'OMITIDA ✓';
+}
+
+function canvasEstaVacio() {
+  const pixelData = firmaCtx.getImageData(0, 0, firmaCanvas.width, firmaCanvas.height).data;
+  return !pixelData.some(canal => canal !== 0);
+}
+
+function getFirmaBase64() {
+  if (firmaOmitida || canvasEstaVacio()) return '';
+  return firmaCanvas.toDataURL('image/png');
+}
+
+// ─────────────────────────────────────────────────────────────
 
 function trackChange(e) {
   const el = e.target;
-  const changed = document.querySelectorAll('.changed').length;
-  const badge = document.getElementById('changes-count');
-  if (changed > 0 || el.value !== '') {
-    badge.classList.add('visible');
-    badge.textContent = `${document.querySelectorAll('input.changed, textarea.changed').length} campo(s) modificado(s)`;
-  }
   el.classList.add('changed');
+  const changed = document.querySelectorAll('input.changed, textarea.changed').length;
+  const badge = document.getElementById('changes-count');
+  badge.classList.add('visible');
+  badge.textContent = `${changed} campo(s) modificado(s)`;
 }
 
 // TABLAS
@@ -817,7 +1076,8 @@ function recopilarDatos() {
     solicitud_servicio: JSON.stringify(solicitudes),
     correo_envio: document.getElementById('correo_cliente').value,
     id_cliente: window._id_cliente || '',
-    resume_url_principal: RESUME_URL || ''
+    resume_url_principal: RESUME_URL || '',
+    firma_cliente: getFirmaBase64()   // ← NUEVO: firma en base64 o '' si se omitió
   };
 }
 
@@ -840,13 +1100,10 @@ async function guardarCorrecciones() {
 
     if (!res.ok) throw new Error('Error ' + res.status);
 
-    // Cancelar el Wait del flujo principal si hay resumeUrl
     if (RESUME_URL) {
       try {
         await fetch(RESUME_URL + '?action=corregir', { method: 'GET', mode: 'no-cors' });
-      } catch(e) {
-        // Ignorar error de CORS — la llamada igual llega a n8n
-      }
+      } catch(e) { /* Ignorar error CORS */ }
     }
 
     loading.classList.remove('active');
@@ -873,12 +1130,10 @@ function showToast(msg, type) {
 // INIT
 window.addEventListener('DOMContentLoaded', () => {
   const params = getParams();
-
   if (!params || !params.id_servicio) {
     document.getElementById('no-data-msg').style.display = 'block';
     return;
   }
-
   buildForm(params);
 });
 </script>
